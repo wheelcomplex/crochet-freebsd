@@ -29,7 +29,7 @@ dd if=/dev/zero of=/dev/mmcsd1 bs=64k count=1
 echo
 echo 'Creating MSDOS FAT12 boot partition on eMMC'
 gpart create -s mbr mmcsd1
-gpart add -a 63 -b 63 -s 2m -t '!12' mmcsd1
+gpart add -s 2m -t '!12' mmcsd1
 gpart set -a active -i 1 mmcsd1
 newfs_msdos -L 'EMMCBOOT' -F 12 /dev/mmcsd1s1
 
@@ -57,6 +57,7 @@ tar -c -f - -C / \
 	--exclude usr/src \
 	--exclude usr/ports \
 	--exclude usr/obj \
+	--exclude 'usr/swap*' \
 	--exclude mnt \
 	--exclude .sujournal \
 	--exclude var/run \
@@ -75,7 +76,7 @@ echo 'Cleaning up the copied system'
 # (In particular, if this SD card is used to copy
 # a system onto a bunch of BBBlacks, we do not want
 # them to all have the same SSH keys.)
-rm /mnt/etc/ssh/*key*
+rm -f /mnt/etc/ssh/*key*
 
 echo
 echo 'Replacing fstab on eMMC'

@@ -28,8 +28,16 @@ FREEBSD_INSTALLKERNEL_BOARD_ARGS=""
 SRCCONF=/dev/null
 __MAKE_CONF=/dev/null
 
-WORLDJOBS=${WORLDJOBS}
-KERNJOBS=${KERNJOBS}
+if [ -z ${WORLDJOBS} ]; then
+	WORLDJOBS="-j $(sysctl -n hw.ncpu)"
+else
+	WORLDJOBS="-j${WORLDJOBS}"
+fi
+if [ -z ${KERNJOBS} ]; then
+	KERNJOBS="-j $(sysctl -n hw.ncpu)"
+else
+	KERNJOBS="-j${KERNJOBS}"
+fi
 
 freebsd_default_makeobjdirprefix ( ) {
     if [ -z "$MAKEOBJDIRPREFIX" ]; then
@@ -241,7 +249,7 @@ freebsd_installworld ( ) {
     CONF=${TARGET_ARCH}
     echo "Installing FreeBSD world at "`date`
     echo "    Destination: $1"
-    if make ${_FREEBSD_WORLD_ARGS} ${FREEBSD_INSTALLWORLD_EXTRA_ARGS} ${FREEBSD_INSTALLWORLD_BOARD_ARGS} DESTDIR=$1 installworld > ${WORKDIR}/_.installworld.${CONF}.log 2>&1
+    if make SRCCONF=${SRCCONF} __MAKE_CONF=${__MAKE_CONF} ${_FREEBSD_WORLD_ARGS} ${FREEBSD_INSTALLWORLD_EXTRA_ARGS} ${FREEBSD_INSTALLWORLD_BOARD_ARGS} DESTDIR=$1 installworld > ${WORKDIR}/_.installworld.${CONF}.log 2>&1
     then
         true # success
     else
@@ -250,7 +258,7 @@ freebsd_installworld ( ) {
         exit 1
     fi
 
-    if make TARGET_ARCH=$TARGET_ARCH DESTDIR=$1 distrib-dirs > ${WORKDIR}/_.distrib-dirs.${CONF}.log 2>&1
+    if make SRCCONF=${SRCCONF} __MAKE_CONF=${__MAKE_CONF} TARGET_ARCH=$TARGET_ARCH DESTDIR=$1 distrib-dirs > ${WORKDIR}/_.distrib-dirs.${CONF}.log 2>&1
     then
         true # success
     else
@@ -259,7 +267,7 @@ freebsd_installworld ( ) {
         exit 1
     fi
 
-    if make TARGET_ARCH=$TARGET_ARCH DESTDIR=$1 distribution > ${WORKDIR}/_.distribution.${CONF}.log 2>&1
+    if make SRCCONF=${SRCCONF} __MAKE_CONF=${__MAKE_CONF} TARGET_ARCH=$TARGET_ARCH DESTDIR=$1 distribution > ${WORKDIR}/_.distribution.${CONF}.log 2>&1
     then
         true # success
     else
@@ -270,6 +278,9 @@ freebsd_installworld ( ) {
 
     # Touch up /etc/src.conf so that native "make buildkernel" will DTRT:
     echo "KERNCONF=${KERNCONF}" >> $1/etc/src.conf
+
+    # Add /firstboot marker so /etc/rc will DTRT
+    touch $1/firstboot
 }
 
 # freebsd_installkernel: Install FreeBSD kernel to image
@@ -312,6 +323,7 @@ freebsd_ubldr_build ( ) {
     LOGFILE=${UBLDR_DIR}/_.ubldr.${CONF}.build.log
     ubldr_makefiles=`pwd`/share/mk
     buildenv=`make TARGET_ARCH=$TARGET_ARCH buildenvvars`
+    buildenv="$buildenv SRCCONF=${SRCCONF} __MAKE_CONF=${__MAKE_CONF}"
 
     mkdir -p ${UBLDR_DIR}
 
@@ -360,9 +372,13 @@ freebsd_ubldr_copy ( ) {
 }
 
 freebsd_ubldr_copy_ubldr ( ) {
-    echo "Installing ubldr in $1"
+    if [ $1 = "." ]; then
+	echo "Installing ubldr in ${PWD}"
+    else
+	echo "Installing ubldr in $1"
+    fi
     CONF=${TARGET_ARCH}-${KERNCONF}
-    cp ${WORKDIR}/ubldr-${CONF}/boot/ubldr $1 || exit 1
+    cp ${WORKDIR}/ubldr-${CONF}/boot/ubldr* $1 || exit 1
 }
 
 freebsd_ubldr_copy_ubldr_help ( ) {
@@ -424,43 +440,41 @@ freebsd_install_fdt ( ) (
     if [ -f ${_FDTDIR}/${buildenv_machine}/${1} ]; then
         _FDTDIR=${_FDTDIR}/${buildenv_machine}
     fi
+    mkdir -p ${WORKDIR}/fdt
+    _DTBINTERMEDIATEDIR=`mktemp -d ${WORKDIR}/fdt/fdt.XXXXXX`
     case $1 in
-        *.dtb)
-            case $2 in
-                *.dtb)
-                    (cd $_FDTDIR; cat $1) > $2
-                    ;;
-                *.dts)
-                    (cd $_FDTDIR; eval $buildenv dtc -I dtb -O dts -p 8192 $1) > $2
-                    ;;
-                *)
-                    if [ -d $2 ]; then
-                        (cd $_FDTDIR; cat $1) > $2/`basename $1`
-                    else
-                        echo "Can't compile $1 to $2"
-                        exit 1
-                    fi
-                    ;;
-            esac
-            ;;
         *.dts)
+	    _DTSIN=${_FDTDIR}/$1
+	    case ${FREEBSD_VERSION} in
+		10.0|10.1) _DTBINTERMEDIATE=${_DTBINTERMEDIATEDIR}/out.dtb
+		    ;;
+		1*.*) _DTBINTERMEDIATE=${_DTBINTERMEDIATEDIR}
+		    ;;
+		*)
+		    echo "ERROR: Crochet can only build images for FreeBSD 10.0 or later"
+		    exit 1
+		    ;;
+	    esac
+	    echo ${FREEBSD_SRC}/sys/tools/fdt/make_dtb.sh ${FREEBSD_SRC}/sys ${_DTSIN} ${_DTBINTERMEDIATE} | (cd ${FREEBSD_SRC}; make TARGET_ARCH=$TARGET_ARCH buildenv > /dev/null)
             case $2 in
                 *.dts)
-                    (cd $_FDTDIR; eval $buildenv dtc -I dts -O dts -p 8192 $1) > $2
+		    _DTSOUT=$2
+		    dtc -I dtb -O dts ${_DTBINTERMEDIATEDIR}/*.dtb > ${_DTSOUT}
                     ;;
                 *.dtb)
-                    (cd $_FDTDIR; eval $buildenv dtc -I dts -O dtb -p 8192 $1) > $2
+		    _DTBOUT=$2
+		    cp ${_DTBINTERMEDIATEDIR}/*.dtb ${_DTBOUT}
                     ;;
                 *)
-                    if [ -d $2 ]; then
-                        (cd $_FDTDIR; eval $buildenv dtc -I dts -O dts -p 8192 $1) > $2/`basename $1`
-                    else
-                        echo "Can't compile $1 to $2"
-                        exit 1
-                    fi
+                    echo "Can't compile $1 to $2"
+                    exit 1
                     ;;
             esac
             ;;
+	*)
+	    echo "Cannot compile $1 to $2"
+	    exit 1
+	    ;;
     esac
 )
 
