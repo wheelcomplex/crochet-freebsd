@@ -1,4 +1,18 @@
 #!/bin/sh
+if [ -z "$CROCHET_NCPU" ]
+then
+    ncpu="$(sysctl -n hw.ncpu)"
+    test -z "$ncpu" && ncpu=1
+    test $ncpu -ge 2 && let ncpu=$ncpu-1 >/dev/null 2>&1
+    echo " -"
+    echo " - Running with $ncpu CPU(s)."
+    echo " -"
+    export CROCHET_NCPU=$ncpu
+    test $ncpu -ge 1 && let ncpu=$ncpu-1 >/dev/null 2>&1
+    cpuset -l 0-$ncpu $0 $@
+    exit $?
+fi
+
 set -e
 echo 'Starting at '`date`
 
