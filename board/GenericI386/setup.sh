@@ -1,6 +1,6 @@
 TARGET_ARCH=i386
 KERNCONF=GENERIC
-IMAGE_SIZE=$((600 * 1000 * 1000))
+IMAGE_SIZE=$((2000 * 1000 * 1000))
 
 generic_i386_partition_image ( ) { 
         # basic setup

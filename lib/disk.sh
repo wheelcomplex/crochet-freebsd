@@ -1,8 +1,8 @@
 # $1 - dir to unmount and delete
 disk_unmount_dir ( ) {
     echo "Unmounting $1"
-    umount $1 || true
-    rmdir $1 || true
+    umount $1 2>/dev/null || true
+    rmdir $1 2>/dev/null || true
 }
 
 # $1 - md to release
@@ -44,8 +44,11 @@ disk_create_image ( ) {
     echo "Creating a ${SIZE_DISPLAY} raw disk image in:"
     echo "    $1"
     [ -f $1 ] && rm -f $1
+    set +e
     mkdir -p $(dirname $1) && \
-    dd if=/dev/zero of=$1 bs=512 seek=$(($2 / 512)) count=0 >/dev/null
+        dd if=/dev/zero of=$1 bs=512 seek=$(($2 / 512)) count=0 >/dev/null 2>&1 
+    test $? -ne 0 && echo "error: create $1 failed." && exit 1
+    set -e
     DISK_MD=`mdconfig -a -t vnode -f $1 -x 63 -y 255`
     test -z "$DISK_MD" && echo "error: mdconfig -a -f $1 failed" && exit 1
     disk_record_md ${DISK_MD}
@@ -66,7 +69,7 @@ disk_partition_mbr ( ) {
 disk_prep_mountdir ( ) {
     if [ -d "$1" ]; then
         echo "   Removing already-existing mount directory."
-        umount $1 || true
+        umount $1 2>/dev/null || true
         if rmdir $1; then
             echo "   Removed pre-existing mount directory; creating new one."
         else
