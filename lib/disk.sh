@@ -44,8 +44,10 @@ disk_create_image ( ) {
     echo "Creating a ${SIZE_DISPLAY} raw disk image in:"
     echo "    $1"
     [ -f $1 ] && rm -f $1
-    dd if=/dev/zero of=$1 bs=512 seek=$(($2 / 512)) count=0 >/dev/null 2>&1
+    mkdir -p $(dirname $1) && \
+    dd if=/dev/zero of=$1 bs=512 seek=$(($2 / 512)) count=0 >/dev/null
     DISK_MD=`mdconfig -a -t vnode -f $1 -x 63 -y 255`
+    test -z "$DISK_MD" && echo "error: mdconfig -a -f $1 failed" && exit 1
     disk_record_md ${DISK_MD}
 }
 
