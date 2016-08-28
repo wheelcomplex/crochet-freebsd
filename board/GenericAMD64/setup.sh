@@ -16,7 +16,7 @@ generic_amd64_partition_image ( ) {
         echo "Boot files are at: "${BOOTFILES} 
         gpart bootcode -b ${BOOTFILES}/mbr/mbr ${DISK_MD} || exit 1
         gpart set -a active -i 1 ${DISK_MD} || exit 1
-        bsdlabel -B -b ${BOOTFILES}/boot2/boot `disk_ufs_partition` || exit 1
+        bsdlabel -w -B -b ${BOOTFILES}/boot2/boot `disk_ufs_partition` || exit 1
 
         #show the disk
         gpart show ${DISK_MD}

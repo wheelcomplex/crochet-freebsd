@@ -78,7 +78,7 @@ generic_i386_partition_image ( ) {
     echo "Installing bootblocks"
     gpart bootcode -b ${WORKDIR}/boot/mbr ${DISK_MD} || exit 1
     gpart set -a active -i 1 ${DISK_MD} || exit 1
-    bsdlabel -B -b ${WORKDIR}/boot/boot `disk_ufs_slice` || exit 1
+    bsdlabel -w -B -b ${WORKDIR}/boot/boot `disk_ufs_slice` || exit 1
 }
 strategy_add $PHASE_PARTITION_LWW generic_i386_partition_image
 
