@@ -1,1 +1,1 @@
-/dev/ada0s1	/		ufs rw,noatime		1 1
+/dev/ufs/bsdrootfs	/		ufs rw,noatime		1 1

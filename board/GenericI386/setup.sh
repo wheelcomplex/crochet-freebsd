@@ -7,6 +7,8 @@ generic_i386_partition_image ( ) {
         disk_partition_mbr
         disk_ufs_create
 
+        disk_ufs_label 1 bsdrootfs || exit 1
+
         # boot loader	
         echo "Installing bootblocks"
 

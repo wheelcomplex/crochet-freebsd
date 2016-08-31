@@ -177,6 +177,20 @@ freebsd_current_test ( ) {
 #
 _freebsd_build ( ) {
     LOGFILE=${WORKDIR}/_.build$1.$2.log
+
+    test -f "${WORKDIR}/_.build$1.$2.tag" && mv "${WORKDIR}/_.build$1.$2.tag" "${WORKDIR}/_.build$1.$2.tag.pre"
+    cd $FREEBSD_SRC && git log -n 1 | head -n1 > ${WORKDIR}/_.build$1.$2.tag || exit 1
+    if diff ${WORKDIR}/_.build$1.$2.tag ${WORKDIR}/_.build$1.$2.tag.pre >/dev/null 2>&1
+    then
+        echo "FreeBSD $2 $1 tag unmodifyed after previous build"
+    else
+        echo " Rebuilding because source tag changed after previous build:"
+        echo " old: "`cat ${WORKDIR}/_.build$1.$2.tag.pre`
+        echo " new: "`cat ${WORKDIR}/_.build$1.$2.tag`
+        rm -f ${WORKDIR}/_.built-$1.$2
+    fi
+
+
     if diff ${WORKDIR}/_.build$1.$2.sh ${WORKDIR}/_.built-$1.$2 >/dev/null 2>&1
     then
         echo "Using FreeBSD $2 $1 from previous build"
