@@ -185,8 +185,8 @@ _freebsd_build ( ) {
         echo "FreeBSD $2 $1 tag unmodifyed after previous build"
     else
         echo " Rebuilding because source tag changed after previous build:"
-        echo " old: "`cat ${WORKDIR}/_.build$1.$2.tag.pre`
-        echo " new: "`cat ${WORKDIR}/_.build$1.$2.tag`
+        echo " old: "`cat ${WORKDIR}/_.build$1.$2.tag.pre 2>/dev/null`
+        echo " new: "`cat ${WORKDIR}/_.build$1.$2.tag 2>/dev/null`
         rm -f ${WORKDIR}/_.built-$1.$2
     fi
 
