@@ -98,7 +98,7 @@ disk_count ( ) {
     fi
 }
 
-# 
+#
 # Get value for variable with the given name from the given disk
 # index, which is relative to the given type, or absolute if the type
 # is omitted or empty.
@@ -118,7 +118,7 @@ disk_get_var ( ) {
     fi
     ABSINDEX=$1
 
-    if [ -n "$TYPE" ]; then 
+    if [ -n "$TYPE" ]; then
 	ABSINDEX=`disk_absindex ${TYPE} ${1}`
     fi
     VARNAME=$2
@@ -127,7 +127,7 @@ disk_get_var ( ) {
 }
 
 
-# 
+#
 # Set variable with the given name to the given value for the given
 # disk index, which is relative to the given type, or absolute if the
 # type is omitted or empty.
@@ -148,7 +148,7 @@ disk_set_var ( ) {
     fi
     ABSINDEX=$1
 
-    if [ -n "$TYPE" ]; then 
+    if [ -n "$TYPE" ]; then
 	ABSINDEX=`disk_absindex ${TYPE} ${1}`
     fi
     VARNAME=$2
@@ -157,7 +157,7 @@ disk_set_var ( ) {
     setvar DISK_${ABSINDEX}_${VARNAME} ${VALUE}
 }
 
-# 
+#
 # Adjust disk counts and set post-creation per-disk info-tracking variables
 #
 # $1: Type (e.g., FAT, RESERVED, UFS)
@@ -170,7 +170,7 @@ disk_created_new ( ) {
 
     DISK_COUNT=$(( `disk_count` + 1 ))
     setvar DISK_${TYPE}_COUNT $(( `disk_count ${TYPE}` + 1 ))
-    
+
     ABSINDEX=`disk_count`
     RELINDEX=`disk_count ${TYPE}`
 
@@ -334,7 +334,11 @@ disk_fat_create ( ) {
         echo "Default to FAT${_FAT_TYPE} for partition size $1"
     fi
 
-    newfs_msdos -L ${FAT_LABEL} -F ${_FAT_TYPE} ${NEW_FAT_DEVICE} >/dev/null
+    if [ "${FAT_LABEL}" = "-" ]; then
+        newfs_msdos -F ${_FAT_TYPE} ${NEW_FAT_DEVICE} >/dev/null
+    else
+        newfs_msdos -L ${FAT_LABEL} -F ${_FAT_TYPE} ${NEW_FAT_DEVICE} >/dev/null
+    fi
 
     disk_created_new FAT ${NEW_FAT_SLICE}
 }
@@ -358,7 +362,7 @@ disk_ufs_slice ( ) {
 # $1: index of UFS partition
 disk_ufs_device ( ) {
     local INDEX=$1
-    disk_device UFS ${INDEX:-1} 
+    disk_device UFS ${INDEX:-1}
 }
 
 # $1: index of UFS partition
@@ -375,7 +379,7 @@ disk_ufs_create ( ) {
     local NEW_UFS_SLICE_NUMBER
     local NEW_UFS_PARTITION
     local NEW_UFS_DEVICE
-    
+
     if [ -n "$1" ]; then
 	SIZE_ARG="-s $1"
 	SIZE_DISPLAY=" $1"
@@ -383,7 +387,8 @@ disk_ufs_create ( ) {
 
     echo "Creating a${SIZE_DISPLAY} UFS partition at "`date`
 
-    NEW_UFS_SLICE=`gpart add -t freebsd ${SIZE_ARG} ${DISK_MD} | sed -e 's/ .*//'` || exit 1
+    # 512k alignment helps boot1.efi find UFS.
+    NEW_UFS_SLICE=`gpart add -t freebsd -a 512k ${SIZE_ARG} ${DISK_MD} | sed -e 's/ .*//'` || exit 1
     NEW_UFS_SLICE_NUMBER=`echo ${NEW_UFS_SLICE} | sed -e 's/.*[^0-9]//'`
 
     gpart create -s BSD ${NEW_UFS_SLICE}
@@ -418,7 +423,7 @@ disk_ufs_label ( ) {
 
     if [ -n "$UFS_LABEL" ]; then
 	UFS_DEVICE=`disk_ufs_device ${UFS_INDEX}`
-	echo "Labeling ${UFS_DEVICE} ${UFS_LABEL}" 
+	echo "Labeling ${UFS_DEVICE} ${UFS_LABEL}"
 	tunefs -L ${UFS_LABEL} ${UFS_DEVICE}
     fi
 }
@@ -436,7 +441,9 @@ disk_ufs_mount ( ) {
 #
 disk_efi_create ( ) {
     NEW_EFI_PARTITION=`gpart add -t efi -s 800K ${DISK_MD} | sed -e 's/ .*//'` || exit 1
-    dd if=${FREEBSD_OBJDIR}/sys/boot/efi/boot1/boot1.efifat of=${NEW_EFI_PARTITION}
+    NEW_EFI_DEVICE=/dev/${NEW_EFI_PARTITION}
+	echo "Writing EFI partition to ${NEW_EFI_DEVICE}"
+    dd if=${FREEBSD_OBJDIR}/sys/boot/efi/boot1/boot1.efifat of=${NEW_EFI_DEVICE}
 }
 
 

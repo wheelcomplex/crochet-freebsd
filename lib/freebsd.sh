@@ -28,17 +28,6 @@ FREEBSD_INSTALLKERNEL_BOARD_ARGS=""
 SRCCONF=/dev/null
 __MAKE_CONF=/dev/null
 
-if [ -z ${WORLDJOBS} ]; then
-	WORLDJOBS="-j $(sysctl -n hw.ncpu)"
-else
-	WORLDJOBS="-j${WORLDJOBS}"
-fi
-if [ -z ${KERNJOBS} ]; then
-	KERNJOBS="-j $(sysctl -n hw.ncpu)"
-else
-	KERNJOBS="-j${KERNJOBS}"
-fi
-
 freebsd_default_makeobjdirprefix ( ) {
     if [ -z "$MAKEOBJDIRPREFIX" ]; then
         MAKEOBJDIRPREFIX=${WORKDIR}/obj
@@ -91,8 +80,8 @@ freebsd_objdir ( ) {
     # really should not need this; we can instead use the following
     # idiom to copy files out of the obj tree without actually
     # knowing where it is:
-    #     "cd src-dir-location; make DESTDIR=XYZ install" 
-    
+    #     "cd src-dir-location; make DESTDIR=XYZ install"
+
     if [ "$FREEBSD_MAJOR_VERSION" -eq "8" ]
     then
         FREEBSD_OBJDIR=${MAKEOBJDIRPREFIX}/${TARGET_ARCH}${FREEBSD_SRC}
@@ -226,6 +215,11 @@ _freebsd_build ( ) {
 # $@: additional make arguments
 #
 freebsd_buildworld ( ) {
+if [ -z ${WORLDJOBS} ]; then
+	WORLDJOBS="-j $(sysctl -n hw.ncpu)"
+else
+	WORLDJOBS="-j${WORLDJOBS}"
+fi
     _FREEBSD_WORLD_ARGS="TARGET_ARCH=${TARGET_ARCH} SRCCONF=${SRCCONF} __MAKE_CONF=${__MAKE_CONF} ${FREEBSD_EXTRA_ARGS} ${FREEBSD_WORLD_EXTRA_ARGS} ${FREEBSD_WORLD_BOARD_ARGS}"
     if [ -n "${TARGET_CPUTYPE}" ]; then
         _FREEBSD_WORLD_ARGS="TARGET_CPUTYPE=${TARGET_CPUTYPE} ${_FREEBSD_WORLD_ARGS}"
@@ -244,6 +238,11 @@ freebsd_buildworld ( ) {
 # $@: arguments to make.
 #
 freebsd_buildkernel ( ) {
+if [ -z ${KERNJOBS} ]; then
+	KERNJOBS="-j $(sysctl -n hw.ncpu)"
+else
+	KERNJOBS="-j${KERNJOBS}"
+fi
     _FREEBSD_KERNEL_ARGS="TARGET_ARCH=${TARGET_ARCH} SRCCONF=${SRCCONF} __MAKE_CONF=${__MAKE_CONF} KERNCONF=${KERNCONF} ${FREEBSD_EXTRA_ARGS} ${FREEBSD_KERNEL_EXTRA_ARGS} ${FREEBSD_KERNEL_BOARD_ARGS}"
     if [ -n "${TARGET_CPUTYPE}" ]; then
         _FREEBSD_KERNEL_ARGS="TARGET_CPUTYPE=${TARGET_CPUTYPE} ${_FREEBSD_KERNEL_ARGS}"
@@ -365,9 +364,9 @@ freebsd_ubldr_build ( ) {
     eval $buildenv make "$@" -m $ubldr_makefiles depend >> ${LOGFILE} 2>&1
     if /bin/sh -e ${UBLDR_DIR}/_.ubldr.${CONF}.sh >> ${LOGFILE} 2>&1
     then
-        mv ${UBLDR_DIR}/_.ubldr.${CONF}.sh ${UBLDR_DIR}/_.ubldr.${CONF}.built
         cd arm/uboot
         eval $buildenv make "$@" DESTDIR=${UBLDR_DIR}/ BINDIR=boot MK_MAN=no -m $ubldr_makefiles install >> ${LOGFILE} || exit 1
+        mv ${UBLDR_DIR}/_.ubldr.${CONF}.sh ${UBLDR_DIR}/_.ubldr.${CONF}.built
     else
         echo "Failed to build FreeBSD ubldr"
         echo "  Log in ${LOGFILE}"
@@ -402,6 +401,61 @@ freebsd_ubldr_copy_ubldr_help ( ) {
     echo "Installing ubldr help file in $1"
     CONF=${TARGET_ARCH}-${KERNCONF}
     cp ${WORKDIR}/ubldr-${CONF}/boot/loader.help $1 || exit 1
+}
+
+#
+# loader.efi support
+#
+freebsd_loader_efi_build ( ) {
+    cd ${FREEBSD_SRC}
+    CONF=${TARGET_ARCH}-${KERNCONF}
+    EFI_DIR=${WORKDIR}/efi-${CONF}
+    LOGFILE=${EFI_DIR}/_.efi.${CONF}.build.log
+    sharemk=`pwd`/share/mk
+    buildenv=`make TARGET_ARCH=$TARGET_ARCH buildenvvars`
+    buildenv="$buildenv SRCCONF=${SRCCONF} __MAKE_CONF=${__MAKE_CONF}"
+
+    mkdir -p ${EFI_DIR}
+
+    # Record the build command we plan to use.
+    echo $buildenv make "$@" -m $sharemk all > ${EFI_DIR}/_.efi.${CONF}.sh
+
+    # If the command is unchanged, we won't rebuild.
+    if diff ${EFI_DIR}/_.efi.${CONF}.built ${EFI_DIR}/_.efi.${CONF}.sh > /dev/null 2>&1
+    then
+        echo "Using efi from previous build"
+        return 0
+    fi
+
+    echo "Building FreeBSD $CONF efi at "`date`
+    echo "    (Logging to ${LOGFILE})"
+    rm -rf ${EFI_DIR}/boot
+    mkdir -p ${EFI_DIR}/boot/defaults
+
+    cd sys/boot
+    eval $buildenv make "$@" -m $sharemk obj > ${LOGFILE} 2>&1
+    eval $buildenv make "$@" -m $sharemk clean >> ${LOGFILE} 2>&1
+    eval $buildenv make "$@" -m $sharemk depend >> ${LOGFILE} 2>&1
+    if /bin/sh -e ${EFI_DIR}/_.efi.${CONF}.sh >> ${LOGFILE} 2>&1
+    then
+        cd efi/boot1
+        eval $buildenv make "$@" DESTDIR=${EFI_DIR}/ BINDIR=boot MK_MAN=no -m $sharemk install >> ${LOGFILE} || exit 1
+        mv ${EFI_DIR}/_.efi.${CONF}.sh ${EFI_DIR}/_.efi.${CONF}.built
+    else
+        echo "Failed to build FreeBSD efi"
+        echo "  Log in ${LOGFILE}"
+        echo
+        tail ${LOGFILE}
+        exit 1
+    fi
+}
+
+freebsd_loader_efi_copy ( ) {
+    target=${PWD}
+    LOGFILE=${WORKDIR}/_.loader.efi.install.${CONF}.log
+    [ "$1" != "." ] && target="$1"
+    echo "Installing boot1.efi in ${TARGET}"
+    cp ${WORKDIR}/efi-${CONF}/boot/boot1.efi $1 || exit 1
 }
 
 # freebsd_install_usr_src:  Copy FREEBSD_SRC tree
@@ -510,5 +564,3 @@ freebsd_replicate ( ) {
     pax -r -w -p e -k . $2
     echo "Replication complete at "`date`
 }
-
-
