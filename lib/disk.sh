@@ -16,7 +16,8 @@ _DISK_MOUNTED_DIRS=""  # List of things to be unmounted when we're done
 disk_unmount_all ( ) {
     cd ${TOPDIR}
     for d in ${_DISK_MOUNTED_DIRS}; do
-	disk_unmount_dir $d
+#	disk_unmount_dir $d
+echo "$d do not umounted."
     done
     _DISK_MOUNTED_DIRS=""
     for d in ${_DISK_MDS}; do
@@ -407,7 +408,16 @@ disk_ufs_create ( ) {
     # Turn on NFSv4 ACLs
     tunefs -N enable ${NEW_UFS_DEVICE}
 
+	echo "md status"
+	gpart show ${DISK_MD}
+	gpart show ${NEW_UFS_SLICE}
+
     disk_created_new UFS ${NEW_UFS_PARTITION}
+
+	echo "created, md status"
+	gpart show ${DISK_MD}
+	gpart show ${NEW_UFS_SLICE}
+
 }
 
 # $1: index of UFS partition
